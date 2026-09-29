@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Sabrina's Challenge - Leaderboard Edition</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Canvas Confetti CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Fredoka', cursive, sans-serif;
+            touch-action: manipulation;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .font-outfit {
+            font-family: 'Outfit', sans-serif;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+        }
+        .pulse-btn {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        canvas {
+            touch-action: none;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body id="gameBody" class="w-screen h-screen flex flex-col justify-center items-center transition-all duration-700 bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 text-white">
+
+    <div class="relative w-full h-full max-w-2xl max-h-[850px] flex flex-col justify-center items-center p-3 sm:p-6">
+
+        <!-- 1. START SCREEN -->
+        <div id="startScreen" class="absolute inset-0 z-30 flex flex-col items-center justify-center p-6 text-center m-2 sm:m-4 rounded-3xl glass-card transition-all duration-500 overflow-y-auto">
+            <div class="text-5xl sm:text-6xl mb-2 animate-bounce">🎁</div>
+            <h1 class="text-3xl sm:text-5xl font-extrabold text-white drop-shadow-md mb-1">
+                Sabrina's Challenge
+            </h1>
+            <p class="text-xs sm:text-base text-white/90 mb-4 max-w-md font-outfit">
+                Zeige deinen Freunden Annika, Nils & Sofie, wer den höchsten Score holt!
+            </p>
+
+            <div class="w-full max-w-xs space-y-3 mb-5">
+                <div>
+                    <label for="nameInput" class="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1 text-left px-1">
+                        Gib deinen Namen ein:
+                    </label>
+                    <input type="text" id="nameInput" placeholder="Z. B. Annika, Nils, Sofie..." 
+                        class="w-full px-5 py-3 rounded-2xl bg-white/20 border-2 border-white/40 text-white placeholder-white/60 font-bold text-center text-lg focus:outline-none focus:border-white focus:bg-white/30 transition-all shadow-inner">
+                </div>
+                <p id="errorMsg" class="text-red-300 text-xs font-bold hidden">Bitte gib zuerst deinen Namen ein!</p>
+            </div>
+
+            <button id="startBtn" class="w-full max-w-xs py-3.5 px-8 bg-white text-purple-900 font-extrabold text-lg rounded-2xl shadow-xl hover:bg-opacity-95 hover:scale-105 active:scale-95 transition-all cursor-pointer pulse-btn mb-4">
+                CHALLENGE STARTEN 🚀
+            </button>
+
+            <!-- Leaderboard Preview on Start Screen -->
+            <div class="w-full max-w-xs bg-black/30 rounded-2xl p-3 border border-white/10">
+                <div class="text-xs font-bold uppercase tracking-wider text-yellow-300 mb-2 flex justify-between items-center">
+                    <span>🏆 Aktuelle Rangliste</span>
+                    <span id="startTopLeader">Keine Einträge</span>
+                </div>
+                <div id="startLeaderList" class="text-xs space-y-1 font-outfit text-white/80 max-h-24 overflow-y-auto">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. GAMEPLAY HUD & CANVAS -->
+        <div id="gameContainer" class="relative w-full h-full flex flex-col justify-between items-center rounded-3xl overflow-hidden glass-card hidden">
+            
+            <!-- HUD Header -->
+            <div id="hud" class="w-full px-4 sm:px-6 py-3.5 flex justify-between items-center bg-black/30 backdrop-blur-md border-b border-white/10 z-10">
+                <div class="flex items-center space-x-2">
+                    <span id="playerAvatar" class="text-2xl sm:text-3xl">🧺</span>
+                    <div>
+                        <div id="playerNameHUD" class="font-extrabold text-sm sm:text-base leading-tight">Spieler</div>
+                        <div id="themeSubtitle" class="text-xs opacity-80 font-outfit">Theme</div>
+                    </div>
+                </div>
+
+                <!-- Lives & Score Counters -->
+                <div class="flex items-center space-x-3">
+                    <div id="livesDisplay" class="flex text-lg sm:text-xl tracking-tight">
+                        ❤️ ❤️ ❤️
+                    </div>
+
+                    <div class="flex items-center bg-white/20 px-3 py-1 rounded-full border border-white/30 shadow-md">
+                        <span class="text-xs font-bold uppercase tracking-wider mr-1.5 hidden sm:inline">Punkte:</span>
+                        <span id="scoreText" class="text-lg sm:text-2xl font-extrabold text-yellow-300">0</span>
+                        <span class="text-sm font-bold mx-1 opacity-60">/</span>
+                        <span class="text-sm font-bold opacity-80">20</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Canvas for Interactive Game -->
+            <canvas id="gameCanvas" class="w-full h-full cursor-pointer"></canvas>
+
+            <div class="absolute bottom-3 text-xs opacity-75 font-outfit pointer-events-none bg-black/40 px-3 py-1 rounded-full">
+                👆 Bewege die Maus oder wische zum Steuern
+            </div>
+        </div>
+
+        <!-- 3. WIN / GAME OVER & LEADERBOARD SCREEN -->
+        <div id="endScreen" class="absolute inset-0 z-30 flex flex-col items-center justify-center p-5 text-center m-2 sm:m-4 rounded-3xl glass-card transition-all duration-500 hidden overflow-y-auto">
+            <div id="winEmoji" class="text-5xl sm:text-6xl mb-1 animate-bounce">🏆</div>
+            <h2 id="winTitle" class="text-2xl sm:text-3xl font-extrabold text-white mb-1">
+                Ergebnis
+            </h2>
+            <div id="finalScoreTag" class="text-xs sm:text-sm font-bold text-yellow-300 bg-black/40 px-4 py-1 rounded-full border border-white/20 mb-2 font-outfit">
+                Erreichte Punkte: 0
+            </div>
+
+            <!-- Personalized Message Box -->
+            <div class="bg-black/40 backdrop-blur-md p-4 rounded-2xl border border-white/20 max-w-md my-1 shadow-xl">
+                <p id="winMessage" class="text-xs sm:text-sm leading-relaxed text-white/90 font-outfit">
+                    Nachricht wird geladen...
+                </p>
+            </div>
+
+            <!-- HIGH SCORE RANKING TABLE -->
+            <div class="w-full max-w-md bg-black/50 backdrop-blur-md p-3.5 rounded-2xl border border-yellow-400/30 my-2 shadow-2xl">
+                <div class="flex justify-between items-center border-b border-white/20 pb-2 mb-2">
+                    <span class="font-bold text-sm text-yellow-300 flex items-center gap-1">
+                        👑 Globales Ranking <span id="onlineIndicator" class="text-[10px] bg-green-500/30 text-green-300 px-1.5 py-0.5 rounded-full border border-green-400/40 hidden">LIVE 🌐</span>
+                    </span>
+                    <span id="personalRecordBadge" class="text-xs bg-yellow-400/20 text-yellow-300 px-2 py-0.5 rounded-full font-outfit font-bold border border-yellow-400/40">
+                        Dein Rekord: 0
+                    </span>
+                </div>
+
+                <div id="leaderboardList" class="space-y-1.5 max-h-36 overflow-y-auto text-left font-outfit text-xs sm:text-sm pr-1">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-2 w-full max-w-xs mt-2">
+                <button id="replayBtn" class="flex-1 py-2.5 px-5 bg-white text-gray-900 font-extrabold text-sm sm:text-base rounded-2xl shadow-lg hover:scale-105 active:scale-95 transition-all">
+                    Nochmal 🔄
+                </button>
+                <button id="switchUserBtn" class="flex-1 py-2.5 px-5 bg-white/20 border border-white/40 text-white font-extrabold text-sm sm:text-base rounded-2xl hover:bg-white/30 active:scale-95 transition-all">
+                    Anderer Name 👤
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        /* Audio Synthesizer (Web Audio API) */
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playCollect() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.12);
+            }
+
+            playHurt() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(110, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+
+            playWinFanfare() {
+                if (!this.ctx) return;
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, index) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.value = freq;
+                    const startTime = this.ctx.currentTime + index * 0.12;
+                    gain.gain.setValueAtTime(0.3, startTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(startTime);
+                    osc.stop(startTime + 0.3);
+                });
+            }
+        }
+
+        const sound = new SoundEngine();
+
+        /* Theme Definitions */
+        const THEMES = {
+            annika: {
+                name: 'Annika',
+                themeName: 'Pinguin-Paradies 🐧',
+                avatar: '🐧',
+                title: 'Pinguin-Königin Annika! 🐧',
+                bgGradient: 'from-cyan-900 via-blue-900 to-indigo-950',
+                goodItems: ['🐟', '❄️', '🐧', '🐟'],
+                badItems: ['🧊', '⚓'],
+                particles: '❄️',
+                winMsg: 'Glückwunsch Annika! 🐧 Du hast die 20 Punkte gerockt! Aber das Beste daran: Ich freue mich riesig, dass du gerade ein paar Minuten deiner wertvollen Lebenszeit völlig sinnfrei für mein Spiel verschwendet hast. Das kann dir keiner mehr zurückgeben! ❄️😂 <br><br>— <strong>Deine Sabrina</strong>'
+            },
+            nils: {
+                name: 'Nils',
+                themeName: 'Tennis-König 🎾',
+                avatar: '🎾',
+                title: 'Grand-Slam Gewinner Nils! 🎾',
+                bgGradient: 'from-emerald-900 via-green-900 to-teal-950',
+                goodItems: ['🎾', '🏆', '🥇', '🎾'],
+                badItems: ['🎾❌', '💣'],
+                particles: '✨',
+                winMsg: 'Game, Set & Match, Nils! 🎾 Stark gespielt! Und ehrlich gesagt freue ich mich riesig darüber, dass du ein paar Minuten deiner wertvollen Lebenszeit geopfert hast, um digitale Tennisbälle für mich zu fangen. Absoluter Ehrendienst! 🏆😎 <br><br>— <strong>Deine Sabrina</strong>'
+            },
+            sofie: {
+                name: 'Sofie',
+                themeName: 'Bikini Bottom 🧽',
+                avatar: '🧽',
+                title: 'Bikini Bottom Legende Sofie! 🧽',
+                bgGradient: 'from-yellow-700 via-amber-800 to-blue-950',
+                goodItems: ['🍔', '⭐️', '🧽', '🍔'],
+                badItems: ['🪼', '⚓'],
+                particles: '🫧',
+                winMsg: 'Ich bin bereit! 🧽 Bravo Sofie, 20 Krabbenburger gefangen! Das Schönste für mich ist aber zu wissen, dass du gerade ein paar wertvolle Minuten deiner Lebenszeit opfern musstest, um meinen Quallen auszuweichen. Ich feiere das total! ⭐️🥳 <br><br>— <strong>Deine Sabrina</strong>'
+            },
+            default: {
+                name: 'Freund/in',
+                themeName: 'Sternen-Jagd 🌟',
+                avatar: '⭐',
+                title: 'Herausforderung gemeistert! 🎉',
+                bgGradient: 'from-purple-900 via-indigo-900 to-slate-950',
+                goodItems: ['⭐️', '💎', '✨', '⭐'],
+                badItems: ['💣', '👾'],
+                particles: '✨',
+                winMsg: 'Wahnsinn, du hast die 20 Punkte geschafft! 🎉 Das Wichtigste für mich: Ich freue mich riesig, dass du dir ein paar Minuten deiner wertvollen Lebenszeit genommen hast, um sie für dieses Minispiel zu verschwenden! Ein besseres Geschenk gibt es nicht. 😂 <br><br>— <strong>Deine Sabrina</strong>'
+            }
+        };
+
+        // Fresh Highscore Storage Key (starts at 0)
+        const STORAGE_KEY = 'sabrina_challenge_highscores_v3';
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sabrina-challenge-app';
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let firebaseEnabled = false;
+
+        async function initFirebase() {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                try {
+                    const firebaseConfig = JSON.parse(__firebase_config);
+                    const app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        const userCred = await signInWithCustomToken(auth, __initial_auth_token);
+                        currentUser = userCred.user;
+                    } else {
+                        const userCred = await signInAnonymously(auth);
+                        currentUser = userCred.user;
+                    }
+
+                    if (currentUser) {
+                        firebaseEnabled = true;
+                        const indicator = document.getElementById('onlineIndicator');
+                        if (indicator) indicator.classList.remove('hidden');
+                        subscribeToGlobalLeaderboard();
+                    }
+                } catch (e) {
+                    console.warn("Cloud-Highscore Modus offline, verwende lokalen Speicher:", e);
+                }
+            }
+        }
+
+        function subscribeToGlobalLeaderboard() {
+            if (!db || !currentUser) return;
+            const scoresCol = collection(db, 'artifacts', appId, 'public', 'data', 'highscores');
+
+            onSnapshot(scoresCol, (snapshot) => {
+                let globalScores = [];
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    if (data && data.name && typeof data.score === 'number') {
+                        globalScores.push({ name: data.name, score: data.score });
+                    }
+                });
+
+                // Sort descending in memory
+                globalScores.sort((a, b) => b.score - a.score);
+                globalScores = globalScores.slice(0, 10);
+
+                renderLeaderboards(globalScores, currentPlayerName);
+            }, (error) => {
+                console.error("Fehler beim Abrufen der globalen Rangliste:", error);
+            });
+        }
+
+        function getHighscores() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch(e) {
+                return [];
+            }
+        }
+
+        async function saveHighscore(name, newScore, avatarEmoji) {
+            let scores = getHighscores();
+            const cleanName = name.trim();
+            const fullName = `${cleanName} ${avatarEmoji}`;
+
+            const existingIndex = scores.findIndex(s => s.name.toLowerCase().startsWith(cleanName.toLowerCase()));
+
+            if (existingIndex !== -1) {
+                if (newScore > scores[existingIndex].score) {
+                    scores[existingIndex].score = newScore;
+                    scores[existingIndex].name = fullName;
+                }
+            } else {
+                scores.push({ name: fullName, score: newScore });
+            }
+
+            scores.sort((a, b) => b.score - a.score);
+            scores = scores.slice(0, 10);
+
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(scores));
+            } catch(e) {}
+
+            // Online Cloud-Synchronisierung
+            if (firebaseEnabled && db && currentUser) {
+                try {
+                    const playerDocId = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '') || ('player_' + Date.now());
+                    const playerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'highscores', playerDocId);
+                    const docSnap = await getDoc(playerDocRef);
+
+                    if (!docSnap.exists() || (docSnap.data().score < newScore)) {
+                        await setDoc(playerDocRef, {
+                            name: fullName,
+                            score: newScore,
+                            timestamp: Date.now()
+                        });
+                    }
+                } catch (err) {
+                    console.error("Highscore konnte nicht in der Cloud gespeichert werden:", err);
+                }
+            }
+
+            return scores;
+        }
+
+        function renderLeaderboards(scores, currentName) {
+            const listEl = document.getElementById('leaderboardList');
+            const startListEl = document.getElementById('startLeaderList');
+            const startTopLeader = document.getElementById('startTopLeader');
+            const personalBadge = document.getElementById('personalRecordBadge');
+
+            // Absicherung, falls kein valides Array übergeben wurde
+            if (!Array.isArray(scores)) {
+                scores = getHighscores();
+            }
+
+            if (scores.length > 0) {
+                startTopLeader.textContent = `1. ${scores[0].name} (${scores[0].score} Pkt)`;
+            } else {
+                startTopLeader.textContent = 'Noch keine Einträge';
+            }
+
+            let html = '';
+            let startHtml = '';
+
+            if (scores.length === 0) {
+                html = '<div class="text-center text-white/50 py-3">Noch keine Highscores vorhanden. Sei der Erste!</div>';
+                startHtml = '<div class="text-white/50">Werde Erster auf der Liste!</div>';
+            } else {
+                scores.forEach((entry, idx) => {
+                    const rank = idx + 1;
+                    let badgeClass = 'bg-white/10 border-white/10';
+                    let medal = `#${rank}`;
+
+                    if (rank === 1) {
+                        badgeClass = 'bg-yellow-500/20 border-yellow-400/50 text-yellow-300 font-bold';
+                        medal = '👑';
+                    } else if (rank === 2) {
+                        badgeClass = 'bg-slate-300/20 border-slate-300/40 text-slate-200 font-bold';
+                        medal = '🥈';
+                    } else if (rank === 3) {
+                        badgeClass = 'bg-amber-700/20 border-amber-600/40 text-amber-300 font-bold';
+                        medal = '🥉';
+                    }
+
+                    const isCurrent = currentName && entry.name.toLowerCase().startsWith(currentName.trim().toLowerCase());
+                    if (isCurrent && personalBadge) {
+                        personalBadge.textContent = `Dein Rekord: ${entry.score} Pkt`;
+                    }
+
+                    const highlight = isCurrent ? 'ring-2 ring-yellow-400' : '';
+
+                    html += `
+                        <div class="flex justify-between items-center p-2 rounded-xl border ${badgeClass} ${highlight} transition-all">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-6 text-center font-bold text-sm">${medal}</span>
+                                <span class="font-bold">${entry.name}</span>
+                            </div>
+                            <span class="font-extrabold text-yellow-300">${entry.score} Pkt</span>
+                        </div>
+                    `;
+
+                    if (idx < 3) {
+                        startHtml += `
+                            <div class="flex justify-between items-center py-0.5">
+                                <span>${medal} ${entry.name}</span>
+                                <span class="font-bold text-yellow-300">${entry.score} Pkt</span>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            if (listEl) listEl.innerHTML = html;
+            if (startListEl) startListEl.innerHTML = startHtml;
+        }
+
+        const gameBody = document.getElementById('gameBody');
+        const startScreen = document.getElementById('startScreen');
+        const gameContainer = document.getElementById('gameContainer');
+        const endScreen = document.getElementById('endScreen');
+        const nameInput = document.getElementById('nameInput');
+        const errorMsg = document.getElementById('errorMsg');
+        const startBtn = document.getElementById('startBtn');
+        const replayBtn = document.getElementById('replayBtn');
+        const switchUserBtn = document.getElementById('switchUserBtn');
+
+        const playerNameHUD = document.getElementById('playerNameHUD');
+        const playerAvatarHUD = document.getElementById('playerAvatar');
+        const themeSubtitle = document.getElementById('themeSubtitle');
+        const scoreText = document.getElementById('scoreText');
+        const livesDisplay = document.getElementById('livesDisplay');
+
+        const winEmoji = document.getElementById('winEmoji');
+        const winTitle = document.getElementById('winTitle');
+        const finalScoreTag = document.getElementById('finalScoreTag');
+        const winMessage = document.getElementById('winMessage');
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let currentTheme = THEMES.default;
+        let currentPlayerName = '';
+        let score = 0;
+        let lives = 3;
+        const TARGET_SCORE = 20;
+        let isGameRunning = false;
+
+        let playerObj = { x: 0, y: 0, size: 45 };
+        let fallingItems = [];
+        let backgroundParticles = [];
+        // Initial Leaderboard Load & Cloud Init
+        renderLeaderboards(getHighscores(), '');
+        initFirebase();
+
+        function resizeCanvas() {
+            if (!gameContainer) return;
+            const rect = gameContainer.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height - 65;
+            playerObj.y = canvas.height - 40;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function getThemeForName(inputName) {
+            const clean = inputName.trim().toLowerCase();
+            if (clean.includes('annika')) return THEMES.annika;
+            if (clean.includes('nils')) return THEMES.nils;
+            if (clean.includes('sofie') || clean.includes('sophie')) return THEMES.sofie;
+            return THEMES.default;
+        }
+
+        function initStartGame() {
+            const rawName = nameInput.value.trim();
+            if (!rawName) {
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+            errorMsg.classList.add('hidden');
+            sound.init();
+
+            currentPlayerName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+            currentTheme = getThemeForName(rawName);
+
+            gameBody.className = `w-screen h-screen flex flex-col justify-center items-center transition-all duration-700 bg-gradient-to-br ${currentTheme.bgGradient} text-white`;
+            playerNameHUD.textContent = currentPlayerName;
+            playerAvatarHUD.textContent = '🧺';
+            themeSubtitle.textContent = `${currentTheme.themeName}`;
+
+            score = 0;
+            lives = 3;
+            updateHUD();
+            fallingItems = [];
+            backgroundParticles = [];
+
+            for (let i = 0; i < 25; i++) {
+                backgroundParticles.push({
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight,
+                    size: Math.random() * 16 + 10,
+                    speed: Math.random() * 1.2 + 0.3,
+                    char: currentTheme.particles
+                });
+            }
+
+            startScreen.classList.add('hidden');
+            endScreen.classList.add('hidden');
+            gameContainer.classList.remove('hidden');
+
+            resizeCanvas();
+            playerObj.x = canvas.width / 2;
+            isGameRunning = true;
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateHUD() {
+            scoreText.textContent = score;
+            livesDisplay.textContent = '❤️ '.repeat(Math.max(0, lives)).trim();
+        }
+
+        function spawnItem() {
+            const speedMultiplier = 1 + Math.floor(score / 5) * 0.25;
+            const badProbability = Math.min(0.5, 0.25 + (score / 50));
+            const isGood = Math.random() > badProbability;
+            
+            const array = isGood ? currentTheme.goodItems : currentTheme.badItems;
+            const emoji = array[Math.floor(Math.random() * array.length)];
+
+            fallingItems.push({
+                x: Math.random() * (canvas.width - 50) + 25,
+                y: -30,
+                speed: (Math.random() * 2.0 + 2.5) * speedMultiplier,
+                size: 36,
+                isGood: isGood,
+                emoji: emoji
+            });
+        }
+
+        let frameCounter = 0;
+        function gameLoop() {
+            if (!isGameRunning) return;
+            frameCounter++;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            backgroundParticles.forEach(p => {
+                p.y += p.speed;
+                if (p.y > canvas.height + 30) {
+                    p.y = -20;
+                    p.x = Math.random() * canvas.width;
+                }
+                ctx.font = `${p.size}px sans-serif`;
+                ctx.globalAlpha = 0.35;
+                ctx.fillText(p.char, p.x, p.y);
+                ctx.globalAlpha = 1.0;
+            });
+
+            const spawnRate = Math.max(22, 42 - Math.floor(score / 3));
+            if (frameCounter % spawnRate === 0) {
+                spawnItem();
+            }
+
+            for (let i = fallingItems.length - 1; i >= 0; i--) {
+                const item = fallingItems[i];
+                item.y += item.speed;
+
+                ctx.font = `${item.size}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(item.emoji, item.x, item.y);
+
+                const dist = Math.hypot(item.x - playerObj.x, item.y - playerObj.y);
+                if (dist < (playerObj.size / 2 + item.size / 2 - 6)) {
+                    if (item.isGood) {
+                        score += 1;
+                        sound.playCollect();
+                    } else {
+                        score = Math.max(0, score - 1);
+                        lives -= 1;
+                        sound.playHurt();
+                    }
+
+                    updateHUD();
+                    fallingItems.splice(i, 1);
+
+                    if (lives <= 0) {
+                        triggerGameOver();
+                        return;
+                    }
+                    continue;
+                }
+
+                if (item.y > canvas.height + 40) {
+                    fallingItems.splice(i, 1);
+                }
+            }
+
+            // Draw Player Basket on Canvas
+            ctx.font = `${playerObj.size}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🧺', playerObj.x, playerObj.y);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        async function processEndGameLogic() {
+            try {
+                const updatedScores = await saveHighscore(currentPlayerName, score, currentTheme.avatar);
+                renderLeaderboards(updatedScores, currentPlayerName);
+            } catch (err) {
+                console.error("Fehler beim Verarbeiten des Spielendes:", err);
+                renderLeaderboards(getHighscores(), currentPlayerName);
+            }
+        }
+
+        async function triggerWin() {
+            isGameRunning = false;
+            sound.playWinFanfare();
+            await processEndGameLogic();
+
+            confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            setTimeout(() => {
+                confetti({ particleCount: 80, angle: 60, spread: 55, origin: { x: 0 } });
+                confetti({ particleCount: 80, angle: 120, spread: 55, origin: { x: 1 } });
+            }, 300);
+
+            winEmoji.textContent = currentTheme.avatar;
+            winTitle.textContent = `${currentTheme.title}`;
+            finalScoreTag.textContent = `Erreichte Punkte: ${score}`;
+            winMessage.innerHTML = `${currentTheme.winMsg}`;
+
+            gameContainer.classList.add('hidden');
+            endScreen.classList.remove('hidden');
+        }
+
+        async function triggerGameOver() {
+            isGameRunning = false;
+
+            if (score >= TARGET_SCORE) {
+                await triggerWin();
+                return;
+            }
+
+            await processEndGameLogic();
+
+            const pointsNeeded = TARGET_SCORE - score;
+            winEmoji.textContent = '💥';
+            winTitle.textContent = 'Game Over!';
+            finalScoreTag.textContent = `Erreichte Punkte: ${score}`;
+            
+            winMessage.innerHTML = `Haha, knapp daneben! Du hattest <strong>${score} Punkte</strong>. Dir fehlten noch genau <strong>${pointsNeeded} Punkte</strong> zum Sieg! <br><br>Verschwende doch gleich nochmal ein paar Minuten deiner wertvollen Lebenszeit für Sabrina und versuche es erneut! 😜`;
+
+            gameContainer.classList.add('hidden');
+            endScreen.classList.remove('hidden');
+        }
+
+        function handlePointerMove(e) {
+            if (!isGameRunning) return;
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const touchX = clientX - rect.left;
+            playerObj.x = Math.max(playerObj.size / 2, Math.min(canvas.width - playerObj.size / 2, touchX));
+        }
+
+        canvas.addEventListener('mousemove', handlePointerMove);
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            handlePointerMove(e);
+        }, { passive: false });
+
+        window.addEventListener('keydown', e => {
+            if (!isGameRunning) return;
+            const step = 30;
+            if (e.key === 'ArrowLeft' || e.key === 'a') {
+                playerObj.x = Math.max(playerObj.size / 2, playerObj.x - step);
+            } else if (e.key === 'ArrowRight' || e.key === 'd') {
+                playerObj.x = Math.min(canvas.width - playerObj.size / 2, playerObj.x + step);
+            }
+        });
+
+        startBtn.addEventListener('click', initStartGame);
+        nameInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter') initStartGame();
+        });
+
+        replayBtn.addEventListener('click', () => {
+            initStartGame();
+        });
+
+        switchUserBtn.addEventListener('click', () => {
+            endScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            nameInput.value = '';
+            gameBody.className = `w-screen h-screen flex flex-col justify-center items-center transition-all duration-700 bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 text-white`;
+            renderLeaderboards(getHighscores(), '');
+        });
+    </script>
+</body>
+</html>
